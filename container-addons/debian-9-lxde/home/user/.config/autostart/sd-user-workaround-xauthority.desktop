@@ -1,0 +1,5 @@
+[Desktop Entry]
+Name=Workaround for systemd dbus XAUTHORITY
+Exec=dbus-update-activation-environment --systemd XAUTHORITY
+Terminal=false
+Type=Application
