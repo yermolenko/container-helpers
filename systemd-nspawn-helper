@@ -1,0 +1,205 @@
+#!/bin/bash
+#
+#  nspawn-helper - shell script template for automating systemd-nspawn
+#  containers setup and usage
+#
+#  Copyright (C) 2017 Alexander Yermolenko <yaa.mbox@gmail.com>
+#
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+machine_name="debian-9"
+distro_codename="stretch"
+distro_arch="amd64"
+fakeuid="1100"
+fakegid="1100"
+fakename=user
+droot="/srv/nspawn/$machine_name"
+
+autologin=1
+
+x_isolation=1
+x_isolation_display=40
+
+realuid="1000"
+realgid="1000"
+realname="yaa"
+realhome="/home/yaa"
+# where to bindfs fake home directory for easy access
+realbind="$realhome/nspawn/$machine_name-$fakename"
+dhomebase="$droot/home"
+dhome="$dhomebase/$fakename"
+
+common_nspawn_options=""
+
+personality="x86-64"
+[ "$distro_arch" == "i386" ] && personality="x86"
+[ "$distro_arch" == "x86" ] && personality="x86"
+common_nspawn_options="$common_nspawn_options --personality=$personality"
+
+die()
+{
+    msg=${1:-"Unknown Error"}
+    echo "ERROR: $msg" 1>&2
+    exit 1
+}
+
+goodbye()
+{
+    msg=${1:-"Cancelled by user"}
+    echo "INFO: $msg" 1>&2
+    exit 1
+}
+
+info()
+{
+    msg=${1:-"Info"}
+    echo "INFO: $msg" 1>&2
+}
+
+echo "machine_name=$machine_name"
+echo "distro_codename=$distro_codename"
+echo "distro_arch=$distro_arch"
+echo "fakeuid=$fakeuid"
+echo "fakegid=$fakegid"
+echo "fakename=$fakename"
+echo "droot=$droot"
+
+echo "realuid=$realuid"
+echo "realgid=$realgid"
+echo "realhome=$realhome"
+echo "realbind=$realbind"
+echo "dhomebase=$dhomebase"
+echo "dhome=$dhome"
+
+echo "common_nspawn_options=$common_nspawn_options"
+
+[ "$EUID" -eq 0 ] || die "Superuser privileges required"
+
+if [[ ! -e "$droot" ]]; then
+    mkdir -p "$droot" || die "Cannot create $droot"
+    debootstrap --arch="$distro_arch" "$distro_codename" "$droot" \
+        || die "Installation to $droot failed"
+    systemd-nspawn $common_nspawn_options -D "$droot" passwd \
+        || die "Cannot set root password"
+fi
+
+if systemd-nspawn $common_nspawn_options -D "$droot" id "$fakename" >/dev/null 2>&1; then
+    echo "User \"$fakename\" exists"
+else
+    systemd-nspawn $common_nspawn_options -D "$droot" \
+                   groupadd --gid "$fakegid" \
+                   "$fakename" \
+        || die "Cannot create group"
+    systemd-nspawn $common_nspawn_options -D "$droot" \
+                   useradd --uid "$fakeuid" -g "$fakename" \
+                   -G video,audio --create-home \
+                   "$fakename" \
+        || die "Cannot create user"
+    systemd-nspawn $common_nspawn_options -D "$droot" \
+                   chsh -s /bin/bash "$fakename"
+
+    chmod 700 "$dhome"
+    # chown -R "$fakeuid:$fakegid" "$dhome"
+fi
+
+[ -e "$dhome" ] || die "$dhome does not exist"
+[ -e "$realhome" ] || die "$realhome does not exist"
+
+[ -e "$realbind" ] || mkdir "$realbind"
+
+if [ -z "$(ls -A "$realbind")" ]; then
+    echo "Binding fake home directory within the real home"
+    chown "$realuid:$realgid" "$realbind"
+    bindfs --map="$fakeuid/$realuid:@$fakegid/@$realgid" \
+           "$dhome" "$realbind"
+fi
+
+extra_env=""
+
+XAUTH_FILE="$dhome/.Xauthority"
+
+if [[ $x_isolation -eq 0 ]]; then
+    xauth extract - "$DISPLAY" | xauth -f "$XAUTH_FILE" merge -
+    extra_env="$extra_env DISPLAY=$DISPLAY"
+else
+    [ -e /tmp/.X11-unix/X"$x_isolation_display" ] && die "Cannot setup Xephyr"
+
+    COOKIE=`mcookie`
+    [ -e "$XAUTH_FILE" ] && rm -f "$XAUTH_FILE"
+    echo "add :$x_isolation_display . $COOKIE" | xauth -f "$XAUTH_FILE"
+
+    runuser -c \
+       "Xephyr :$x_isolation_display -auth \"$XAUTH_FILE\" \
+           -title \"$fakename@$machine_name - nsvm\" -nolisten tcp \
+           -screen 1900x1000" \
+       "$realname" &
+
+    sleep 3
+    extra_env="$extra_env DISPLAY=:$x_isolation_display"
+    extra_env="$extra_env QT_X11_NO_MITSHM=1"
+fi
+
+chown "$fakeuid:$fakegid" "$XAUTH_FILE"
+
+extra_env="$extra_env LANG=ru_UA.UTF-8"
+
+if [[ -e "$realhome/.config/pulse/cookie" ]]; then
+    mkdir -p "$dhome/.config/pulse" || die "Cannot create $dhome/.config/pulse"
+    cp "$realhome/.config/pulse/cookie" "$dhome/.config/pulse/"
+    chown -R "$fakeuid:$fakegid" "$dhome/.config"
+    chown -R "$fakeuid:$fakegid" "$dhome/.config/pulse/"
+    extra_env="$extra_env PULSE_SERVER=unix:/run_host/user/$realuid/pulse/native"
+fi
+
+echo "export $extra_env" > "$dhome/.extra_env"
+chown "$fakeuid:$fakegid" "$dhome/.extra_env"
+[ -e "$dhome/.bash_profile" ] || cp -p "$dhome/.extra_env" "$dhome/.bash_profile"
+
+if [[ $autologin -eq 1 ]]; then
+    mkdir -p "$droot/etc/systemd/system/console-getty.service.d" >/dev/null 2>&1
+    echo -n "\
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --noclear --autologin $fakename --keep-baud console 115200,38400,9600 \$TERM
+" > "$droot/etc/systemd/system/console-getty.service.d/override.conf"
+fi
+
+nspawn_cmd="-D $droot --machine=$machine_name"
+
+#[ -e /etc/machine-id ] && nspawn_cmd="$nspawn_cmd --bind=/etc/machine-id"
+#[ -e /tmp/.X11-unix ] && nspawn_cmd="$nspawn_cmd --bind=/tmp/.X11-unix"
+#[ -e /dev/shm ] && nspawn_cmd="$nspawn_cmd --bind=/dev/shm"
+#[ -e /dev/snd ] && nspawn_cmd="$nspawn_cmd --bind=/dev/snd"
+[ -e /run/user/$realuid/pulse/native ] && nspawn_cmd="$nspawn_cmd --bind=/run/user/$realuid/pulse/native:/run_host/user/$realuid/pulse/native"
+[ -e /dev/video ] && nspawn_cmd="$nspawn_cmd --bind=/dev/video"
+[ -e /dev/video0 ] && nspawn_cmd="$nspawn_cmd --bind=/dev/video0"
+[ -e /dev/video1 ] && nspawn_cmd="$nspawn_cmd --bind=/dev/video1"
+[ -e /dev/video2 ] && nspawn_cmd="$nspawn_cmd --bind=/dev/video2"
+if [[ $x_isolation -eq 0 ]]; then
+    [ -e /dev/nvidia-modeset ] && nspawn_cmd="$nspawn_cmd --bind=/dev/nvidia-modeset"
+    [ -e /dev/nvidia0 ] && nspawn_cmd="$nspawn_cmd --bind=/dev/nvidia0"
+    [ -e /dev/nvidiactl ] && nspawn_cmd="$nspawn_cmd --bind=/dev/nvidiactl"
+fi
+
+nspawn_cmd="$nspawn_cmd --capability=CAP_IPC_LOCK"
+
+nspawn_cmd="$nspawn_cmd --boot"
+
+echo "Excecuting systemd-nspawn $nspawn_cmd"
+systemd-nspawn $common_nspawn_options $nspawn_cmd
+
+rm -f "$dhome/.Xauthority"
+
+#fusermount -u "$realhome/nspawn/$machine_name"
