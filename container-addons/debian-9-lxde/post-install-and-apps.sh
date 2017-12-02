@@ -27,6 +27,7 @@ apt-get install firefox-esr
 
 apt-get --no-install-recommends install gdebi
 
+# for Dropbox
 apt-get install python-gpgme
 apt-get install ca-certificates
 apt-get install libxslt1.1
@@ -38,3 +39,7 @@ apt-get install mplayer
 
 #apt-get install gnome-keyring
 apt-get install seahorse
+
+# Skype 8.11 needs fairly complete pulseaudio installion for audio calls
+# even if pulseaudio service is not really started inside the container
+#apt-get --no-install-recommends install pulseaudio
