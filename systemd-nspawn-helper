@@ -41,6 +41,13 @@ realbind="$realhome/nspawn/$machine_name-$fakename"
 dhomebase="$droot/home"
 dhome="$dhomebase/$fakename"
 
+pulse_server="unix:/run/user/$realuid/pulse/native"
+#pulse_server="127.0.0.1"
+
+pulse_server_is_socket=0
+[ "${pulse_server:0:5}" == "unix:" ] && pulse_server_is_socket=1
+pulse_server_socket=${pulse_server#unix:}
+
 common_nspawn_options=""
 
 personality="x86-64"
@@ -82,6 +89,13 @@ echo "realhome=$realhome"
 echo "realbind=$realbind"
 echo "dhomebase=$dhomebase"
 echo "dhome=$dhome"
+
+echo "pulse_server_is_socket=$pulse_server_is_socket"
+if [[ $pulse_server_is_socket -eq 1 ]]; then
+    echo "pulse_server_socket=$pulse_server_socket"
+    [ -e "$pulse_server_socket" ] \
+        || echo "Warning: PulseAudio socket does not exist"
+fi
 
 echo "common_nspawn_options=$common_nspawn_options"
 
@@ -160,7 +174,11 @@ if [[ -e "$realhome/.config/pulse/cookie" ]]; then
     cp "$realhome/.config/pulse/cookie" "$dhome/.config/pulse/"
     chown -R "$fakeuid:$fakegid" "$dhome/.config"
     chown -R "$fakeuid:$fakegid" "$dhome/.config/pulse/"
-    extra_env="$extra_env PULSE_SERVER=unix:/run_host/user/$realuid/pulse/native"
+    if [[ $pulse_server_is_socket -eq 1 ]]; then
+        extra_env="$extra_env PULSE_SERVER=unix:/pulse_server/native"
+    else
+        extra_env="$extra_env PULSE_SERVER=\"$pulse_server\""
+    fi
 fi
 
 echo "export $extra_env" > "$dhome/.extra_env"
@@ -182,7 +200,10 @@ nspawn_cmd="-D $droot --machine=$machine_name"
 #[ -e /tmp/.X11-unix ] && nspawn_cmd="$nspawn_cmd --bind=/tmp/.X11-unix"
 #[ -e /dev/shm ] && nspawn_cmd="$nspawn_cmd --bind=/dev/shm"
 #[ -e /dev/snd ] && nspawn_cmd="$nspawn_cmd --bind=/dev/snd"
-[ -e /run/user/$realuid/pulse/native ] && nspawn_cmd="$nspawn_cmd --bind=/run/user/$realuid/pulse/native:/run_host/user/$realuid/pulse/native"
+if [[ $pulse_server_is_socket -eq 1 ]]; then
+    [ -e "$pulse_server_socket" ] && \
+        nspawn_cmd="$nspawn_cmd --bind=$pulse_server_socket:/pulse_server/native"
+fi
 [ -e /dev/video ] && nspawn_cmd="$nspawn_cmd --bind=/dev/video"
 [ -e /dev/video0 ] && nspawn_cmd="$nspawn_cmd --bind=/dev/video0"
 [ -e /dev/video1 ] && nspawn_cmd="$nspawn_cmd --bind=/dev/video1"
