@@ -31,6 +31,8 @@ autologin=1
 
 x_isolation=1
 x_isolation_display=40
+extra_xephyr_options="-screen 1900x1000"
+#extra_xephyr_options="-screen 1900x1000 -no-host-grab"
 
 realuid="1000"
 realgid="1000"
@@ -157,7 +159,7 @@ else
     runuser -c \
        "Xephyr :$x_isolation_display -auth \"$XAUTH_FILE\" \
            -title \"$fakename@$machine_name - nsvm\" -nolisten tcp \
-           -screen 1900x1000" \
+           $extra_xephyr_options" \
        "$realname" &
 
     sleep 3
