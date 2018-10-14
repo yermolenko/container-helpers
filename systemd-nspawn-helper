@@ -31,8 +31,10 @@ autologin=1
 
 x_isolation=1
 x_isolation_display=40
-extra_xephyr_options="-screen 1900x1000"
-#extra_xephyr_options="-screen 1900x1000 -no-host-grab"
+xephyr_resolution=1900x1000
+[[ "$(hostname)" = *nb ]] && xephyr_resolution=1000x578
+extra_xephyr_options="-screen $xephyr_resolution"
+#extra_xephyr_options="-screen $xephyr_resolution -no-host-grab"
 
 realuid="1000"
 realgid="1000"
