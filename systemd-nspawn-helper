@@ -121,8 +121,17 @@ require bindfs "apt-get install bindfs"
 
 if [[ ! -e "$droot" ]]; then
     mkdir -p "$droot" || die "Cannot create $droot"
+    # Ordinary debootstrap call
     debootstrap --arch="$distro_arch" "$distro_codename" "$droot" \
         || die "Installation to $droot failed"
+    # Custom debootstrap call example:
+    # export DEBOOTSTRAP_DIR=/home/yaa/nspawn/tools/debootstrap
+    # /home/yaa/nspawn/tools/debootstrap/debootstrap \
+    #     --arch="$distro_arch" \
+    #     --keyring=/home/yaa/nspawn/tools/keyrings/ubuntu-archive-keyring.gpg \
+    #     --force-check-gpg \
+    #     "$distro_codename" "$droot" http://archive.ubuntu.com/ubuntu \
+    #     || die "Installation to $droot failed"
     systemd-nspawn $common_nspawn_options -D "$droot" passwd \
         || die "Cannot set root password"
 fi
