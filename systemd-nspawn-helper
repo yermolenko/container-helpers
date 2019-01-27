@@ -3,7 +3,8 @@
 #  nspawn-helper - shell script template for automating systemd-nspawn
 #  containers setup and usage
 #
-#  Copyright (C) 2017, 2018 Alexander Yermolenko <yaa.mbox@gmail.com>
+#  Copyright (C) 2017, 2018, 2019 Alexander Yermolenko
+#  <yaa.mbox@gmail.com>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -35,6 +36,8 @@ xephyr_resolution=1900x1000
 [[ "$(hostname)" = *nb ]] && xephyr_resolution=1000x578
 extra_xephyr_options="-screen $xephyr_resolution"
 #extra_xephyr_options="-screen $xephyr_resolution -no-host-grab"
+x_real_display="${DISPLAY#:}"
+#x_real_display=1
 
 realuid="1000"
 realgid="1000"
@@ -170,10 +173,11 @@ fi
 extra_env=""
 
 XAUTH_FILE="$dhome/.Xauthority"
+REAL_XAUTH_FILE="$realhome/.Xauthority"
 
 if [[ $x_isolation -eq 0 ]]; then
-    xauth extract - "$DISPLAY" | xauth -f "$XAUTH_FILE" merge -
-    extra_env="$extra_env DISPLAY=$DISPLAY"
+    xauth -f "$REAL_XAUTH_FILE" extract - ":$x_real_display" | xauth -f "$XAUTH_FILE" merge -
+    extra_env="$extra_env DISPLAY=:$x_real_display"
 else
     [ -e /tmp/.X11-unix/X"$x_isolation_display" ] && die "Cannot setup Xephyr"
 
@@ -248,6 +252,6 @@ nspawn_cmd="$nspawn_cmd --boot"
 echo "Excecuting systemd-nspawn $nspawn_cmd"
 systemd-nspawn $common_nspawn_options $nspawn_cmd
 
-rm -f "$dhome/.Xauthority"
+rm -f "$XAUTH_FILE"
 
 #fusermount -u "$realhome/nspawn/$machine_name"
