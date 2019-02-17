@@ -1,0 +1,68 @@
+#!/bin/bash
+#
+#  nspawn-renew-machine-id - generate new machine-id for a container
+#
+#  Copyright (C) 2017, 2018, 2019 Alexander Yermolenko
+#  <yaa.mbox@gmail.com>
+#
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+droot=${1:?Container directory is required}
+#droot="/srv/nspawn/my-debian-container"
+
+die()
+{
+    msg=${1:-"Unknown Error"}
+    echo "ERROR: $msg" 1>&2
+    exit 1
+}
+
+goodbye()
+{
+    msg=${1:-"Cancelled by user"}
+    echo "INFO: $msg" 1>&2
+    exit 1
+}
+
+info()
+{
+    msg=${1:-"Info"}
+    echo "INFO: $msg" 1>&2
+}
+
+require()
+{
+    local cmd=${1:?"Command name is required"}
+    local extra_info=${2:+"\nNote: $2"}
+    hash $cmd 2>/dev/null || die "$cmd not found$extra_info"
+}
+
+echo "droot=$droot"
+
+[ "$EUID" -eq 0 ] || die "Superuser privileges required"
+
+require systemd-machine-id-setup
+
+rm "$droot/etc/machine-id" && rm "$droot/var/lib/dbus/machine-id" || die "Cannot remove old ids"
+systemd-machine-id-setup --root="$droot"
+if [[ ! -e "$droot/etc/machine-id" ]]; then
+    die "machine-id has not been created"
+fi
+cp "$droot/etc/machine-id" "$droot/var/lib/dbus/" || die "Cannot create dbus/machine-id"
+if [[ ! -e "$droot/var/lib/dbus/machine-id" ]]; then
+    die "dbus/machine-id has not been created"
+fi
+
+echo "New machine-id created for $droot"
