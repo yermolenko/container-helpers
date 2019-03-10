@@ -26,7 +26,7 @@ distro_arch="amd64"
 fakeuid="1100"
 fakegid="1100"
 fakename=user
-droot="/srv/nspawn/$machine_name"
+fakeroot="/srv/nspawn/$machine_name"
 
 autologin=1
 
@@ -45,8 +45,8 @@ realname="yaa"
 realhome="/home/yaa"
 # where to bindfs fake home directory for easy access
 realbind="$realhome/nspawn/$machine_name-$fakename"
-dhomebase="$droot/home"
-dhome="$dhomebase/$fakename"
+fakehomebase="$fakeroot/home"
+fakehome="$fakehomebase/$fakename"
 
 pulse_server="unix:/run/user/$realuid/pulse/native"
 #pulse_server="127.0.0.1"
@@ -95,14 +95,14 @@ echo "distro_arch=$distro_arch"
 echo "fakeuid=$fakeuid"
 echo "fakegid=$fakegid"
 echo "fakename=$fakename"
-echo "droot=$droot"
+echo "fakeroot=$fakeroot"
+echo "fakehomebase=$fakehomebase"
+echo "fakehome=$fakehome"
 
 echo "realuid=$realuid"
 echo "realgid=$realgid"
 echo "realhome=$realhome"
 echo "realbind=$realbind"
-echo "dhomebase=$dhomebase"
-echo "dhome=$dhome"
 
 echo "pulse_server_is_socket=$pulse_server_is_socket"
 if [[ $pulse_server_is_socket -eq 1 ]]; then
@@ -122,43 +122,43 @@ require Xephyr "apt-get install xserver-xephyr"
 require xauth "apt-get install xauth"
 require bindfs "apt-get install bindfs"
 
-if [[ ! -e "$droot" ]]; then
-    mkdir -p "$droot" || die "Cannot create $droot"
+if [[ ! -e "$fakeroot" ]]; then
+    mkdir -p "$fakeroot" || die "Cannot create $fakeroot"
     # Ordinary debootstrap call
-    debootstrap --arch="$distro_arch" "$distro_codename" "$droot" \
-        || die "Installation to $droot failed"
+    debootstrap --arch="$distro_arch" "$distro_codename" "$fakeroot" \
+        || die "Installation to $fakeroot failed"
     # Custom debootstrap call example:
     # export DEBOOTSTRAP_DIR=/home/yaa/nspawn/tools/debootstrap
     # /home/yaa/nspawn/tools/debootstrap/debootstrap \
     #     --arch="$distro_arch" \
     #     --keyring=/home/yaa/nspawn/tools/keyrings/ubuntu-archive-keyring.gpg \
     #     --force-check-gpg \
-    #     "$distro_codename" "$droot" http://archive.ubuntu.com/ubuntu \
-    #     || die "Installation to $droot failed"
-    systemd-nspawn $common_nspawn_options -D "$droot" passwd \
+    #     "$distro_codename" "$fakeroot" http://archive.ubuntu.com/ubuntu \
+    #     || die "Installation to $fakeroot failed"
+    systemd-nspawn $common_nspawn_options -D "$fakeroot" passwd \
         || die "Cannot set root password"
 fi
 
-if systemd-nspawn $common_nspawn_options -D "$droot" id "$fakename" >/dev/null 2>&1; then
+if systemd-nspawn $common_nspawn_options -D "$fakeroot" id "$fakename" >/dev/null 2>&1; then
     echo "User \"$fakename\" exists"
 else
-    systemd-nspawn $common_nspawn_options -D "$droot" \
+    systemd-nspawn $common_nspawn_options -D "$fakeroot" \
                    groupadd --gid "$fakegid" \
                    "$fakename" \
         || die "Cannot create group"
-    systemd-nspawn $common_nspawn_options -D "$droot" \
+    systemd-nspawn $common_nspawn_options -D "$fakeroot" \
                    useradd --uid "$fakeuid" -g "$fakename" \
                    -G video,audio --create-home \
                    "$fakename" \
         || die "Cannot create user"
-    systemd-nspawn $common_nspawn_options -D "$droot" \
+    systemd-nspawn $common_nspawn_options -D "$fakeroot" \
                    chsh -s /bin/bash "$fakename"
 
-    chmod 700 "$dhome"
-    # chown -R "$fakeuid:$fakegid" "$dhome"
+    chmod 700 "$fakehome"
+    # chown -R "$fakeuid:$fakegid" "$fakehome"
 fi
 
-[ -e "$dhome" ] || die "$dhome does not exist"
+[ -e "$fakehome" ] || die "$fakehome does not exist"
 [ -e "$realhome" ] || die "$realhome does not exist"
 
 [ -e "$realbind" ] || mkdir "$realbind"
@@ -167,12 +167,12 @@ if [ -z "$(ls -A "$realbind")" ]; then
     echo "Binding fake home directory within the real home"
     chown "$realuid:$realgid" "$realbind"
     bindfs --map="$fakeuid/$realuid:@$fakegid/@$realgid" \
-           "$dhome" "$realbind"
+           "$fakehome" "$realbind"
 fi
 
 extra_env=""
 
-XAUTH_FILE="$dhome/.Xauthority"
+XAUTH_FILE="$fakehome/.Xauthority"
 REAL_XAUTH_FILE="$realhome/.Xauthority"
 
 if [[ $x_isolation -eq 0 ]]; then
@@ -201,10 +201,10 @@ chown "$fakeuid:$fakegid" "$XAUTH_FILE"
 extra_env="$extra_env LANG=ru_UA.UTF-8"
 
 if [[ -e "$realhome/.config/pulse/cookie" ]]; then
-    mkdir -p "$dhome/.config/pulse" || die "Cannot create $dhome/.config/pulse"
-    cp "$realhome/.config/pulse/cookie" "$dhome/.config/pulse/"
-    chown -R "$fakeuid:$fakegid" "$dhome/.config"
-    chown -R "$fakeuid:$fakegid" "$dhome/.config/pulse/"
+    mkdir -p "$fakehome/.config/pulse" || die "Cannot create $fakehome/.config/pulse"
+    cp "$realhome/.config/pulse/cookie" "$fakehome/.config/pulse/"
+    chown -R "$fakeuid:$fakegid" "$fakehome/.config"
+    chown -R "$fakeuid:$fakegid" "$fakehome/.config/pulse/"
     if [[ $pulse_server_is_socket -eq 1 ]]; then
         extra_env="$extra_env PULSE_SERVER=unix:/pulse_server/native"
     else
@@ -212,20 +212,20 @@ if [[ -e "$realhome/.config/pulse/cookie" ]]; then
     fi
 fi
 
-echo "export $extra_env" > "$dhome/.extra_env"
-chown "$fakeuid:$fakegid" "$dhome/.extra_env"
-[ -e "$dhome/.bash_profile" ] || cp -p "$dhome/.extra_env" "$dhome/.bash_profile"
+echo "export $extra_env" > "$fakehome/.extra_env"
+chown "$fakeuid:$fakegid" "$fakehome/.extra_env"
+[ -e "$fakehome/.bash_profile" ] || cp -p "$fakehome/.extra_env" "$fakehome/.bash_profile"
 
 if [[ $autologin -eq 1 ]]; then
-    mkdir -p "$droot/etc/systemd/system/console-getty.service.d" >/dev/null 2>&1
+    mkdir -p "$fakeroot/etc/systemd/system/console-getty.service.d" >/dev/null 2>&1
     echo -n "\
 [Service]
 ExecStart=
 ExecStart=-/sbin/agetty --noclear --autologin $fakename --keep-baud console 115200,38400,9600 \$TERM
-" > "$droot/etc/systemd/system/console-getty.service.d/override.conf"
+" > "$fakeroot/etc/systemd/system/console-getty.service.d/override.conf"
 fi
 
-nspawn_cmd="-D $droot --machine=$machine_name"
+nspawn_cmd="-D $fakeroot --machine=$machine_name"
 
 #[ -e /etc/machine-id ] && nspawn_cmd="$nspawn_cmd --bind=/etc/machine-id"
 #[ -e /tmp/.X11-unix ] && nspawn_cmd="$nspawn_cmd --bind=/tmp/.X11-unix"
