@@ -189,7 +189,8 @@ else
        "Xephyr :$x_isolation_display -auth \"$XAUTH_FILE\" \
            -title \"$fakename@$machine_name - nsvm\" -nolisten tcp \
            $extra_xephyr_options" \
-       "$realname" &
+       "$realname" 2>/dev/null &
+    runuser_Xephyr_pid=$!
 
     sleep 3
     extra_env="$extra_env DISPLAY=:$x_isolation_display"
@@ -253,5 +254,12 @@ echo "Excecuting systemd-nspawn $nspawn_cmd"
 systemd-nspawn $common_nspawn_options $nspawn_cmd
 
 rm -f "$XAUTH_FILE"
+
+if [[ $x_isolation -eq 1 ]]; then
+    # check process name before killing
+    runuser_Xephyr_name=$( ps -p $runuser_Xephyr_pid -o comm= )
+    [ "x$runuser_Xephyr_name" = "xrunuser" ] && kill $runuser_Xephyr_pid \
+            || die "Cannot stop Xephyr"
+fi
 
 #fusermount -u "$realhome/nspawn/$machine_name"
