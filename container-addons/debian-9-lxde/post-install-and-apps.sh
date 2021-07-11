@@ -1,4 +1,7 @@
-apt-get update
+cat /etc/apt/sources.list
+
+apt-get update || exit 1
+apt-get dist-upgrade
 
 apt-get install bash-completion
 apt-get install locales
