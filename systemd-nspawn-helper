@@ -3,7 +3,7 @@
 #  nspawn-helper - shell script template for automating systemd-nspawn
 #  containers setup and usage
 #
-#  Copyright (C) 2017, 2018, 2019 Alexander Yermolenko
+#  Copyright (C) 2017, 2018, 2019, 2021 Alexander Yermolenko
 #  <yaa.mbox@gmail.com>
 #
 #  This program is free software: you can redistribute it and/or modify
@@ -23,8 +23,8 @@
 machine_name="debian-9"
 distro_codename="stretch"
 distro_arch="amd64"
-fakeuid="1100"
-fakegid="1100"
+fakeuid="10100"
+fakegid="10100"
 fakename=user
 fakeroot="/srv/nspawn/$machine_name"
 
@@ -32,6 +32,7 @@ autologin=1
 
 x_isolation=1
 x_isolation_display=40
+x_isolation_display=$fakeuid
 xephyr_resolution=1900x1000
 [[ "$(hostname)" = *nb ]] && xephyr_resolution=1000x578
 extra_xephyr_options="-screen $xephyr_resolution"
