@@ -33,7 +33,9 @@ autologin=1
 x_isolation=1
 x_isolation_display=40
 x_isolation_display=$fakeuid
-xephyr_resolution=1900x1000
+#xephyr_resolution=1920x1140
+xephyr_resolution=1920x1000
+#xephyr_resolution=1024x540
 [[ "$(hostname)" = *nb ]] && xephyr_resolution=1000x578
 extra_xephyr_options="-screen $xephyr_resolution"
 #extra_xephyr_options="-screen $xephyr_resolution -no-host-grab"
