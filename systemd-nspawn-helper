@@ -251,6 +251,8 @@ fi
 
 nspawn_cmd="$nspawn_cmd --capability=CAP_IPC_LOCK"
 
+#nspawn_cmd="$nspawn_cmd --property=CPUQuota=25%"
+
 nspawn_cmd="$nspawn_cmd --boot"
 
 echo "Excecuting systemd-nspawn $nspawn_cmd"
