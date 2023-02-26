@@ -3,7 +3,7 @@
 #  nspawn-helper - shell script template for automating systemd-nspawn
 #  containers setup and usage
 #
-#  Copyright (C) 2017, 2018, 2019, 2021 Alexander Yermolenko
+#  Copyright (C) 2017, 2018, 2019, 2021, 2023 Alexander Yermolenko
 #  <yaa.mbox@gmail.com>
 #
 #  This program is free software: you can redistribute it and/or modify
@@ -44,8 +44,8 @@ x_real_display="${DISPLAY#:}"
 
 realuid="1000"
 realgid="1000"
-realname="yaa"
-realhome="/home/yaa"
+realname="user"
+realhome="/home/user"
 # where to bindfs fake home directory for easy access
 realbind="$realhome/nspawn/$machine_name-$fakename"
 fakehomebase="$fakeroot/home"
@@ -131,10 +131,10 @@ if [[ ! -e "$fakeroot" ]]; then
     debootstrap --arch="$distro_arch" "$distro_codename" "$fakeroot" \
         || die "Installation to $fakeroot failed"
     # Custom debootstrap call example:
-    # export DEBOOTSTRAP_DIR=/home/yaa/nspawn/tools/debootstrap
-    # /home/yaa/nspawn/tools/debootstrap/debootstrap \
+    # export DEBOOTSTRAP_DIR=/home/user/nspawn/tools/debootstrap
+    # /home/user/nspawn/tools/debootstrap/debootstrap \
     #     --arch="$distro_arch" \
-    #     --keyring=/home/yaa/nspawn/tools/keyrings/ubuntu-archive-keyring.gpg \
+    #     --keyring=/home/user/nspawn/tools/keyrings/ubuntu-archive-keyring.gpg \
     #     --force-check-gpg \
     #     "$distro_codename" "$fakeroot" http://archive.ubuntu.com/ubuntu \
     #     || die "Installation to $fakeroot failed"
