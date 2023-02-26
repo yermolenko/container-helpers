@@ -26,6 +26,8 @@ apt-get install x11-utils
 apt-get install xinput
 apt-get install x11-apps
 
+apt-get install x11-xserver-utils x11-xkb-utils xcape
+
 apt-get install firefox-esr
 
 apt-get --no-install-recommends install gdebi
