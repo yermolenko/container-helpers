@@ -30,6 +30,8 @@ fakeroot="/srv/nspawn/$machine_name"
 
 autologin=1
 
+extra_xephyr_options=()
+
 x_isolation=1
 x_isolation_display=40
 x_isolation_display=$fakeuid
@@ -37,8 +39,8 @@ x_isolation_display=$fakeuid
 xephyr_resolution=1920x1000
 #xephyr_resolution=1024x540
 [[ "$(hostname)" = *nb ]] && xephyr_resolution=1000x578
-extra_xephyr_options="-screen $xephyr_resolution"
-#extra_xephyr_options="-screen $xephyr_resolution -no-host-grab"
+extra_xephyr_options+=(-screen $xephyr_resolution)
+extra_xephyr_options+=(-no-host-grab)
 x_real_display="${DISPLAY#:}"
 #x_real_display=1
 
@@ -58,12 +60,12 @@ pulse_server_is_socket=0
 [ "${pulse_server:0:5}" == "unix:" ] && pulse_server_is_socket=1
 pulse_server_socket=${pulse_server#unix:}
 
-common_nspawn_options=""
+common_nspawn_options=()
 
 personality="x86-64"
 [ "$distro_arch" == "i386" ] && personality="x86"
 [ "$distro_arch" == "x86" ] && personality="x86"
-common_nspawn_options="$common_nspawn_options --personality=$personality"
+common_nspawn_options+=(--personality=$personality)
 
 die()
 {
@@ -114,7 +116,7 @@ if [[ $pulse_server_is_socket -eq 1 ]]; then
         || echo "Warning: PulseAudio socket does not exist"
 fi
 
-echo "common_nspawn_options=$common_nspawn_options"
+echo "common_nspawn_options: ${common_nspawn_options[@]}"
 
 [ "$EUID" -eq 0 ] || die "Superuser privileges required"
 
@@ -140,23 +142,36 @@ if [[ ! -e "$fakeroot" ]]; then
     #     --force-check-gpg \
     #     "$distro_codename" "$fakeroot" http://archive.ubuntu.com/ubuntu \
     #     || die "Installation to $fakeroot failed"
-    systemd-nspawn $common_nspawn_options -D "$fakeroot" passwd \
+
+    sleep 2
+
+    systemd-nspawn "${common_nspawn_options[@]}" -D "$fakeroot" passwd \
         || die "Cannot set root password"
 fi
 
-if systemd-nspawn $common_nspawn_options -D "$fakeroot" id "$fakename" >/dev/null 2>&1; then
+sleep 2
+
+if systemd-nspawn "${common_nspawn_options[@]}" -D "$fakeroot" id "$fakename" >/dev/null 2>&1; then
     echo "User \"$fakename\" exists"
 else
-    systemd-nspawn $common_nspawn_options -D "$fakeroot" \
+    sleep 2
+
+    systemd-nspawn "${common_nspawn_options[@]}" -D "$fakeroot" \
                    groupadd --gid "$fakegid" \
                    "$fakename" \
         || die "Cannot create group"
-    systemd-nspawn $common_nspawn_options -D "$fakeroot" \
+
+    sleep 2
+
+    systemd-nspawn "${common_nspawn_options[@]}" -D "$fakeroot" \
                    useradd --uid "$fakeuid" -g "$fakename" \
                    -G video,audio --create-home \
                    "$fakename" \
         || die "Cannot create user"
-    systemd-nspawn $common_nspawn_options -D "$fakeroot" \
+
+    sleep 2
+
+    systemd-nspawn "${common_nspawn_options[@]}" -D "$fakeroot" \
                    chsh -s /bin/bash "$fakename"
 
     chmod 700 "$fakehome"
@@ -175,14 +190,14 @@ if [ -z "$(ls -A "$realbind")" ]; then
            "$fakehome" "$realbind"
 fi
 
-extra_env=""
+extra_env=()
 
 XAUTH_FILE="$fakehome/.Xauthority"
 REAL_XAUTH_FILE="$realhome/.Xauthority"
 
 if [[ $x_isolation -eq 0 ]]; then
     xauth -f "$REAL_XAUTH_FILE" extract - ":$x_real_display" | xauth -f "$XAUTH_FILE" merge -
-    extra_env="$extra_env DISPLAY=:$x_real_display"
+    extra_env+=(DISPLAY=:$x_real_display)
 else
     [ -e /tmp/.X11-unix/X"$x_isolation_display" ] && die "Cannot setup Xephyr"
 
@@ -193,18 +208,18 @@ else
     runuser -c \
        "Xephyr :$x_isolation_display -auth \"$XAUTH_FILE\" \
            -title \"$fakename@$machine_name - nsvm\" -nolisten tcp \
-           $extra_xephyr_options" \
+           ${extra_xephyr_options[*]}" \
        "$realname" 2>/dev/null &
     runuser_Xephyr_pid=$!
 
     sleep 3
-    extra_env="$extra_env DISPLAY=:$x_isolation_display"
-    extra_env="$extra_env QT_X11_NO_MITSHM=1"
+    extra_env+=(DISPLAY=:$x_isolation_display)
+    extra_env+=(QT_X11_NO_MITSHM=1)
 fi
 
 chown "$fakeuid:$fakegid" "$XAUTH_FILE"
 
-extra_env="$extra_env LANG=ru_UA.UTF-8"
+extra_env+=(LANG=ru_UA.UTF-8)
 
 if [[ -e "$realhome/.config/pulse/cookie" ]]; then
     mkdir -p "$fakehome/.config/pulse" || die "Cannot create $fakehome/.config/pulse"
@@ -212,13 +227,13 @@ if [[ -e "$realhome/.config/pulse/cookie" ]]; then
     chown -R "$fakeuid:$fakegid" "$fakehome/.config"
     chown -R "$fakeuid:$fakegid" "$fakehome/.config/pulse/"
     if [[ $pulse_server_is_socket -eq 1 ]]; then
-        extra_env="$extra_env PULSE_SERVER=unix:/pulse_server/native"
+        extra_env+=(PULSE_SERVER=unix:/pulse_server/native)
     else
-        extra_env="$extra_env PULSE_SERVER=\"$pulse_server\""
+        extra_env+=(PULSE_SERVER=\"$pulse_server\")
     fi
 fi
 
-echo "export $extra_env" > "$fakehome/.extra_env"
+echo "export ${extra_env[*]}" > "$fakehome/.extra_env"
 chown "$fakeuid:$fakegid" "$fakehome/.extra_env"
 [ -e "$fakehome/.bash_profile" ] || cp -p "$fakehome/.extra_env" "$fakehome/.bash_profile"
 
@@ -231,30 +246,30 @@ ExecStart=-/sbin/agetty --noclear --autologin $fakename --keep-baud console 1152
 " > "$fakeroot/etc/systemd/system/console-getty.service.d/override.conf"
 fi
 
-nspawn_cmd="-D $fakeroot --machine=$machine_name"
+nspawn_cmd=(-D "$fakeroot" --machine="$machine_name")
 
-#[ -e /etc/machine-id ] && nspawn_cmd="$nspawn_cmd --bind=/etc/machine-id"
-#[ -e /tmp/.X11-unix ] && nspawn_cmd="$nspawn_cmd --bind=/tmp/.X11-unix"
-#[ -e /dev/shm ] && nspawn_cmd="$nspawn_cmd --bind=/dev/shm"
-#[ -e /dev/snd ] && nspawn_cmd="$nspawn_cmd --bind=/dev/snd"
+#[ -e /etc/machine-id ] && nspawn_cmd+=(--bind=/etc/machine-id)
+#[ -e /tmp/.X11-unix ] && nspawn_cmd+=(--bind=/tmp/.X11-unix)
+#[ -e /dev/shm ] && nspawn_cmd+=(--bind=/dev/shm)
+#[ -e /dev/snd ] && nspawn_cmd+=(--bind=/dev/snd)
 if [[ $pulse_server_is_socket -eq 1 ]]; then
     [ -e "$pulse_server_socket" ] && \
-        nspawn_cmd="$nspawn_cmd --bind=$pulse_server_socket:/pulse_server/native"
+        nspawn_cmd+=(--bind=$pulse_server_socket:/pulse_server/native)
 fi
-[ -e /dev/video ] && nspawn_cmd="$nspawn_cmd --bind=/dev/video"
-[ -e /dev/video0 ] && nspawn_cmd="$nspawn_cmd --bind=/dev/video0"
-[ -e /dev/video1 ] && nspawn_cmd="$nspawn_cmd --bind=/dev/video1"
-[ -e /dev/video2 ] && nspawn_cmd="$nspawn_cmd --bind=/dev/video2"
+[ -e /dev/video ] && nspawn_cmd+=(--bind=/dev/video)
+[ -e /dev/video0 ] && nspawn_cmd+=(--bind=/dev/video0)
+[ -e /dev/video1 ] && nspawn_cmd+=(--bind=/dev/video1)
+[ -e /dev/video2 ] && nspawn_cmd+=(--bind=/dev/video2)
 if [[ $x_isolation -eq 0 ]]; then
-    [ -e /dev/nvidia-modeset ] && nspawn_cmd="$nspawn_cmd --bind=/dev/nvidia-modeset"
-    [ -e /dev/nvidia0 ] && nspawn_cmd="$nspawn_cmd --bind=/dev/nvidia0"
-    [ -e /dev/nvidiactl ] && nspawn_cmd="$nspawn_cmd --bind=/dev/nvidiactl"
+    [ -e /dev/nvidia-modeset ] && nspawn_cmd+=(--bind=/dev/nvidia-modeset)
+    [ -e /dev/nvidia0 ] && nspawn_cmd+=(--bind=/dev/nvidia0)
+    [ -e /dev/nvidiactl ] && nspawn_cmd+=(--bind=/dev/nvidiactl)
 fi
 
 # things_storage="/another/directory/on/the/host"
 # echo "things_storage=$things_storage"
 # [ -e "$things_storage" ] && \
-#     nspawn_cmd="$nspawn_cmd --bind=$things_storage:/home/user/things-storage" \
+#     nspawn_cmd+=(--bind="$things_storage":/home/user/things-storage) \
 #         || die "Cannot mount things_storage directory"
 # things_storage_realbind="$realhome/nspawn/$machine_name-$fakename-things-storage"
 # echo "things_storage_realbind=$things_storage_realbind"
@@ -266,14 +281,16 @@ fi
 #            "$things_storage" "$things_storage_realbind"
 # fi
 
-nspawn_cmd="$nspawn_cmd --capability=CAP_IPC_LOCK"
+nspawn_cmd+=(--capability=CAP_IPC_LOCK)
 
-#nspawn_cmd="$nspawn_cmd --property=CPUQuota=25%"
+#nspawn_cmd+=(--property=CPUQuota=25%)
 
-nspawn_cmd="$nspawn_cmd --boot"
+nspawn_cmd+=(--boot)
 
-echo "Excecuting systemd-nspawn $nspawn_cmd"
-systemd-nspawn $common_nspawn_options $nspawn_cmd
+sleep 2
+
+echo "Excecuting systemd-nspawn ${nspawn_cmd[@]}"
+systemd-nspawn "${common_nspawn_options[@]}" "${nspawn_cmd[@]}"
 
 rm -f "$XAUTH_FILE"
 
