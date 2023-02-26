@@ -128,7 +128,9 @@ require bindfs "apt-get install bindfs"
 if [[ ! -e "$fakeroot" ]]; then
     mkdir -p "$fakeroot" || die "Cannot create $fakeroot"
     # Ordinary debootstrap call
-    debootstrap --arch="$distro_arch" "$distro_codename" "$fakeroot" \
+    debootstrap --arch="$distro_arch" \
+                --force-check-gpg \
+                "$distro_codename" "$fakeroot" \
         || die "Installation to $fakeroot failed"
     # Custom debootstrap call example:
     # export DEBOOTSTRAP_DIR=/home/user/nspawn/tools/debootstrap
