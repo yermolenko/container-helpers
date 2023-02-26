@@ -251,6 +251,21 @@ if [[ $x_isolation -eq 0 ]]; then
     [ -e /dev/nvidiactl ] && nspawn_cmd="$nspawn_cmd --bind=/dev/nvidiactl"
 fi
 
+# things_storage="/another/directory/on/the/host"
+# echo "things_storage=$things_storage"
+# [ -e "$things_storage" ] && \
+#     nspawn_cmd="$nspawn_cmd --bind=$things_storage:/home/user/things-storage" \
+#         || die "Cannot mount things_storage directory"
+# things_storage_realbind="$realhome/nspawn/$machine_name-$fakename-things-storage"
+# echo "things_storage_realbind=$things_storage_realbind"
+# [ -e "$things_storage_realbind" ] || mkdir "$things_storage_realbind"
+# if [ -z "$(ls -A "$things_storage_realbind")" ]; then
+#     echo "Binding things_storage directory within the real home"
+#     chown "$realuid:$realgid" "$things_storage_realbind"
+#     bindfs --map="$fakeuid/$realuid:@$fakegid/@$realgid" \
+#            "$things_storage" "$things_storage_realbind"
+# fi
+
 nspawn_cmd="$nspawn_cmd --capability=CAP_IPC_LOCK"
 
 #nspawn_cmd="$nspawn_cmd --property=CPUQuota=25%"
